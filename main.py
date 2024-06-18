@@ -10,6 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from torchvision.transforms import ToPILImage
+import random
+
+seed = 42
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(seed)
+random.seed(seed)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -39,10 +48,12 @@ train_dataset = datasets.CIFAR10(root='./data', download=True, transform=transfo
 num_train = len(train_dataset)
 indices = list(range(num_train))
 np.random.shuffle(indices)
-subset_indices = indices[:int(0.1 * num_train)]
+subset_indices = indices[:int(0.05 * num_train)]
 
 subset_train_dataset = Subset(train_dataset, subset_indices)
 train_loader = DataLoader(subset_train_dataset, batch_size=32, shuffle=True)
+
+gaussian_diffusion_list = [0.1, 0.3, 0.5]
 
 # With DDPM
 dip_model = DIP()
@@ -62,7 +73,7 @@ for epoch in range(epoch):
 
     for images, _ in train_loader:
         images = images.to(device)
-        for gaussian_level in [0.1]:
+        for gaussian_level in gaussian_diffusion_list:
             gaussian_images = gaussian_diffusion.q_sample(images, torch.tensor(
                 [int(gaussian_level * (gaussian_diffusion.num_timesteps - 1))], device=device).long())
             optimizer.zero_grad()
@@ -100,6 +111,7 @@ no_ddpm_loss = []
 no_ddpm_psnr = []
 no_ddpm_ssim = []
 
+epoch = 50
 for epoch in range(epoch):
     train_loss = []
     train_psnr = []
@@ -194,9 +206,9 @@ plt.xlabel('Epoch')
 plt.ylabel('SSIM Difference')
 plt.legend()
 
-plt.suptitle('Comparison of DDPM and No DDPM Metrics (Train With Gaussian level 0.1)', fontsize=16)
+plt.suptitle('Comparison of DDPM and No DDPM Metrics (Train With Gaussian level mix)', fontsize=16)
 plt.tight_layout()
-plt.savefig("compare_train_level_0.1.png")
+plt.savefig("compare_train_level_mix.png")
 plt.show()
 
 dip_model.eval()
@@ -205,7 +217,7 @@ with torch.no_grad():
     for images, _ in train_loader:
         for image in images:
             image = image.to(device)
-            for gaussian_level in [0.1]:
+            for gaussian_level in [0.1, 0.3, 0.5, 0.7, 1]:
                 gaussian_image = gaussian_diffusion.q_sample(image, torch.tensor(
                     [int(gaussian_level * (gaussian_diffusion.num_timesteps - 1))], device=device).long())
 
@@ -223,7 +235,7 @@ with torch.no_grad():
                 axs[2].set_title('Reconstructed Image DIP with DDPM')
                 axs[3].imshow(ToPILImage()(no_ddpm_dip_model_outputs.cpu()))
                 axs[3].set_title('Reconstructed Image DIP without DDPM')
-                plt.savefig(f"image_train_level_0.1_{gaussian_level}.png")
+                plt.savefig(f"image_train_level_mix_{gaussian_level}.png")
                 plt.show()
 
             break
